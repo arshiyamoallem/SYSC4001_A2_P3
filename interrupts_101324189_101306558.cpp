@@ -1,11 +1,11 @@
 /**
  *
- * @file interrupts.cpp
+ * @file interrupts_101324189_101306558.cpp
  * @author Sasisekhar Govind
  *
  */
 
-#include<interrupts.hpp>
+#include<interrupts_101324189_101306558.hpp>
 
 std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string> trace_file, int time, std::vector<std::string> vectors, std::vector<int> delays, std::vector<external_file> external_files, PCB current, std::vector<PCB> wait_queue) {
 
@@ -50,9 +50,30 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             //Add your FORK output here
+            
+            //step a
+            execution += std::to_string(current_time) + ", " + std::to_string(duration_intr) + ", cloning the PCB of parent process to child process\n";
+            current_time += duration_intr; 
+            
+            // step b
+            PCB child_PCB(current.PID + 1, current.PID, current.program_name, current.size, -1);
 
+            if(!allocate_memory(&child_PCB)) {
+                std::cerr << "ERROR! Memory allocation failed!" << std::endl;
+                break;
+            }
+            wait_queue.push_back(current);
 
-
+            //step c
+            execution += std::to_string(current_time) + ", 0, scheduler called\n";
+            
+            //step d
+            execution +=  std::to_string(current_time) + ", 1, IRET\n";
+            current_time += 1;
+            
+            system_status += "time: " + std::to_string(current_time - 1) + "; current trace: FORK, " + std::to_string(duration_intr) + "\n";
+            system_status += print_PCB(child_PCB, wait_queue) + "\n";
+            
             ///////////////////////////////////////////////////////////////////////////////////////////
 
             //The following loop helps you do 2 things:
@@ -91,8 +112,18 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the child's trace, run the child (HINT: think recursion)
+            
+            auto[child_execution, child_system_status, child_time] = simulate_trace(child_trace, current_time, vectors, delays, external_files, child_PCB, wait_queue); 
 
+            execution += child_execution;
+            system_status += child_system_status;
+            current_time = child_time;
 
+            free_memory(&child_PCB);
+
+            if(!wait_queue.empty()){
+                wait_queue.erase(wait_queue.begin());
+            }
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -105,11 +136,54 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             ///////////////////////////////////////////////////////////////////////////////////////////
             //Add your EXEC output here
 
+            // step f
+            unsigned int program_size = get_size(program_name, external_files);
 
+            if (program_size == (unsigned int) -1) {
+                std::cerr << "Program is not found in external files" << std::endl;
+                break;
+            }
+
+            execution += std::to_string(current_time) + ", " 
+            + std::to_string(duration_intr) + ", Program is" + program_name 
+            + " is " + std::to_string(program_size) + " MB large\n";
+            current_time += duration_intr;
+            
+            // step g
+            current.program_name = program_name;
+            current.size = program_size;
+            current.partition_number = -1;
+
+            if(!allocate_memory(&current)) {
+                std::cerr << "ERROR! Memory allocation failed!" + program_name << std::endl;
+                break;
+            }
+            
+            // step h
+            int load_time = program_size * 15; // it takes 15 ms per MB
+            execution += std::to_string(current_time) + ", " 
+            + std::to_string(load_time) + ", loading program into memory\n";
+            current_time += load_time;
+
+            // step i
+            int marking_time = (rand() % 10) + 1;
+            execution += std::to_string(current_time) + ", " + std::to_string(marking_time) + ", marking partition as occupied\n";
+            current_time += marking_time;
+        
+            // step j
+            int update_time_PCB = (rand() % 10) + 1;
+            execution += std::to_string(current_time) + ", " + std::to_string(update_time_PCB) + ", updating PCB\n";
+            current_time += update_time_PCB;
+
+            // step k
+            execution += std::to_string(current_time) + ", " + std::to_string(0) + ", schedular called\n";
+            execution += std::to_string(current_time) + ", " + std::to_string(1) + ", IRET\n";
+            current_time += 1;
+
+            system_status += "time: " + std::to_string(current_time) + "; current trace: EXEC " + program_name + ", " + std::to_string(duration_intr) + ", \n";
+            system_status += print_PCB(current, wait_queue);
 
             ///////////////////////////////////////////////////////////////////////////////////////////
-
-
             std::ifstream exec_trace_file(program_name + ".txt");
 
             std::vector<std::string> exec_traces;
@@ -121,7 +195,11 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the exec's trace (i.e. trace of external program), run the exec (HINT: think recursion)
 
+            auto[exec_execution, exec_system_status, exec_time] = simulate_trace(exec_traces, current_time, vectors, delays, external_files, current, wait_queue); 
 
+            execution += exec_execution;
+            system_status += exec_system_status;
+            current_time = exec_time;
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -182,3 +260,4 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+
